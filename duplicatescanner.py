@@ -11,7 +11,7 @@ class DuplicateFinder:
         self.root.geometry("820x780")
         self.root.configure(bg="#ffffff")
 
-        self.paragraphs = []
+        self.quotes = []
         self.file_path = ""
 
         # --- MODERN STYLING ---
@@ -56,7 +56,6 @@ class DuplicateFinder:
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=10)
 
-        # Button text updated as requested
         self.btn_scan = tk.Button(
             btn_frame, text="Scan for Duplicates", command=self.run_scan, 
             state=tk.DISABLED, bg="#e5e5e7", fg="#a1a1a1", 
@@ -86,26 +85,27 @@ class DuplicateFinder:
             filename = os.path.basename(file_path)
             self.lbl_status.config(text=f"Selected: {filename}", foreground="#0071e3")
             try:
-                raw_text = ""
+                self.quotes = []
                 with open(self.file_path, 'rb') as file:
                     reader = PyPDF2.PdfReader(file)
                     for page in reader.pages:
                         text = page.extract_text()
-                        if text: raw_text += text + "\n"
-                
-                # Split by double newline to identify full paragraphs/quotes
-                blocks = raw_text.split('\n\n')
-                
-                # UPDATED: Filter for minimum 3 words
-                self.paragraphs = [p.replace('\n', ' ').strip() for p in blocks if len(p.split()) >= 3]
+                        if text:
+                            # Split by single newlines
+                            lines = text.split('\n')
+                            for line in lines:
+                                clean_line = line.strip()
+                                # Filter: Must have at least 3 words
+                                if len(clean_line.split()) >= 3:
+                                    self.quotes.append(clean_line)
                 
                 self.btn_scan.config(state=tk.NORMAL, bg="#34c759", fg="white")
-                self.insert_log(f"Ready. {len(self.paragraphs)} valid text blocks detected.\n")
+                self.insert_log(f"Ready. {len(self.quotes)} quotes detected.\n")
             except Exception as e:
                 self.insert_log(f"Error: {e}\n")
 
     def reset_app(self):
-        self.paragraphs = []
+        self.quotes = []
         self.file_path = ""
         self.lbl_status.config(text="No file selected", foreground="#86868b")
         self.text_area.delete('1.0', tk.END)
@@ -123,29 +123,29 @@ class DuplicateFinder:
             self.insert_log(f"Saved to {os.path.basename(file_to_save)}\n")
 
     def run_scan(self):
-        if not self.paragraphs: return
+        if not self.quotes: return
         threshold = self.similarity_slider.get()
         self.text_area.delete('1.0', tk.END)
         self.insert_log(f"Scanning for duplicates (Min 3 words)...\n" + "—"*30 + "\n")
 
         exacts, potentials, seen_indices = [], [], set()
-        total = len(self.paragraphs)
+        total = len(self.quotes)
 
         for i in range(total):
             self.progress['value'] = (i / total) * 100
-            if i % 5 == 0: self.root.update_idletasks()
+            if i % 10 == 0: self.root.update_idletasks()
 
             if i in seen_indices: continue
             for j in range(i + 1, total):
                 if j in seen_indices: continue
                 
-                ratio = difflib.SequenceMatcher(None, self.paragraphs[i], self.paragraphs[j]).ratio()
+                ratio = difflib.SequenceMatcher(None, self.quotes[i], self.quotes[j]).ratio()
                 
                 if ratio == 1.0:
-                    exacts.append(self.paragraphs[i])
+                    exacts.append(self.quotes[i])
                     seen_indices.add(j)
                 elif ratio >= threshold:
-                    potentials.append((self.paragraphs[i], self.paragraphs[j], ratio))
+                    potentials.append((self.quotes[i], self.quotes[j], ratio))
 
         self.progress['value'] = 100
         if exacts:
