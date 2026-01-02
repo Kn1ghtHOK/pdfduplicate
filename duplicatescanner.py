@@ -3,6 +3,7 @@ from tkinter import filedialog, scrolledtext, ttk
 import PyPDF2
 import difflib
 import os
+import re
 
 class DuplicateFinder:
     def __init__(self, root):
@@ -78,6 +79,20 @@ class DuplicateFinder:
         )
         self.text_area.pack(fill=tk.BOTH, expand=True)
 
+    def is_junk(self, text):
+        """Identifies if a line is likely a page number, header, or footer."""
+        text_lower = text.lower()
+        # Filter 1: Common header/footer keywords
+        junk_keywords = ["page", "p a g e", "copyright", "all rights reserved"]
+        if any(keyword in text_lower for keyword in junk_keywords):
+            return True
+        
+        # Filter 2: Lines that are mostly just numbers, bars, and spaces (e.g., '1 | P a g e')
+        if re.search(r'^\d+\s*\|\s*', text) or text.isdigit():
+            return True
+            
+        return False
+
     def open_pdf(self):
         file_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
         if file_path:
@@ -91,16 +106,15 @@ class DuplicateFinder:
                     for page in reader.pages:
                         text = page.extract_text()
                         if text:
-                            # Split by single newlines
                             lines = text.split('\n')
                             for line in lines:
                                 clean_line = line.strip()
-                                # Filter: Must have at least 3 words
-                                if len(clean_line.split()) >= 3:
+                                # Filter: Must have >= 3 words AND not be junk
+                                if len(clean_line.split()) >= 3 and not self.is_junk(clean_line):
                                     self.quotes.append(clean_line)
                 
                 self.btn_scan.config(state=tk.NORMAL, bg="#34c759", fg="white")
-                self.insert_log(f"Ready. {len(self.quotes)} quotes detected.\n")
+                self.insert_log(f"Ready. {len(self.quotes)} valid quotes detected.\n")
             except Exception as e:
                 self.insert_log(f"Error: {e}\n")
 
